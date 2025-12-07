@@ -30,8 +30,8 @@ export default function Home() {
                   Explore Building Graph →
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800">
-                View Documentation
+              <Button size="lg" variant="outline" className="border-slate-600 text-slate-500 cursor-not-allowed" disabled>
+                Docs Coming Soon
               </Button>
             </div>
           </div>

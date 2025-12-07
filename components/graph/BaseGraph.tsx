@@ -40,6 +40,7 @@ interface BaseGraphProps {
   onRelationshipClick?: (rel: Relationship) => void;
   colorScheme?: StakeholderView;
   className?: string;
+  highlightedCategory?: string | null;
 }
 
 // Color schemes per stakeholder view
@@ -89,12 +90,21 @@ const NODE_SIZES: Record<string, number> = {
   Location: 20,
 };
 
+// Map building element categories to related node patterns
+const CATEGORY_NODE_PATTERNS: Record<string, string[]> = {
+  'Foundation': ['Foundation', 'Concrete', 'Steel', 'Rebar'],
+  'Structure': ['Structure', 'CLT', 'Wood'],
+  'Envelope': ['Envelope', 'Glass', 'Insulation', 'Aluminum', 'Rockwool', 'AGC', 'Reynaers'],
+  'Systems': ['Systems', 'HVAC', 'Daikin'],
+};
+
 export default function BaseGraph({
   data,
   onNodeClick,
   onRelationshipClick,
   colorScheme = 'consumer',
   className = '',
+  highlightedCategory = null,
 }: BaseGraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nvlRef = useRef<any>(null);
@@ -102,13 +112,26 @@ export default function BaseGraph({
 
   const colors = COLOR_SCHEMES[colorScheme];
 
+  // Check if a node matches the highlighted category
+  const isNodeHighlighted = (node: GraphNode): boolean => {
+    if (!highlightedCategory) return false;
+    const patterns = CATEGORY_NODE_PATTERNS[highlightedCategory] || [];
+    const nodeName = String(node.properties?.name || '');
+    const nodeCategory = String(node.properties?.category || '');
+    return patterns.some(pattern => 
+      nodeName.toLowerCase().includes(pattern.toLowerCase()) ||
+      nodeCategory.toLowerCase().includes(pattern.toLowerCase())
+    );
+  };
+
   // Transform nodes for NVL display
   const styledNodes: Node[] = data.nodes.map((node) => {
     const primaryLabel = node.labels?.[0] || 'Unknown';
+    const highlighted = isNodeHighlighted(node);
     return {
       id: node.id,
-      color: colors[primaryLabel] || '#6B7280',
-      size: NODE_SIZES[primaryLabel] || 25,
+      color: highlighted ? '#FBBF24' : (colors[primaryLabel] || '#6B7280'),
+      size: highlighted ? (NODE_SIZES[primaryLabel] || 25) * 1.3 : (NODE_SIZES[primaryLabel] || 25),
       caption: String(node.properties?.name || node.id),
       // Store original data for detail panel
       labels: node.labels,
@@ -157,6 +180,7 @@ export default function BaseGraph({
     allowDynamicMinZoom: true,
     initialZoom: 1,
     relationshipThreshold: 0.55,
+    disableTelemetry: true, // Prevent Segment analytics calls that get blocked by ad blockers
   };
 
   return (
