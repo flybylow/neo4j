@@ -229,11 +229,11 @@ export default function BuildingExplorer({
         {viewMode === '3d' && (
           <div className="h-full relative">
             <BuildingModel
-              onElementHover={setHighlightedElement}
               onElementClick={(element) => {
                 setSelectedElement(element);
+                setHighlightedElement(element);
               }}
-              highlightedElement={highlightedElement || selectedElement}
+              highlightedElement={selectedElement}
             />
             {/* Element card overlay */}
             {selectedElement && (
@@ -280,12 +280,11 @@ export default function BuildingExplorer({
             {/* 3D Model on right */}
             <div className="w-1/2 h-full relative">
               <BuildingModel
-                onElementHover={setHighlightedElement}
                 onElementClick={(element) => {
                   setSelectedElement(element);
                   setHighlightedElement(element);
                 }}
-                highlightedElement={highlightedElement || selectedElement}
+                highlightedElement={selectedElement}
               />
             </div>
           </div>

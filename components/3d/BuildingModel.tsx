@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, Suspense } from 'react';
+import { useRef, useState, Suspense, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, useGLTF, Center, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -45,7 +45,7 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
 
 // Hotspot positions for each element (in 3D space)
 const HOTSPOT_POSITIONS: Record<string, [number, number, number]> = {
-  'Foundation': [0, -0.8, 1.5],
+  'Foundation': [2, -0.5, 2],
   'Structure': [0, 0.5, 0],
   'Envelope': [1.5, 0.8, 0],
   'Systems': [0, 1.5, 0],
@@ -67,26 +67,38 @@ function Hotspot({
       <button
         onClick={onClick}
         className={`
-          px-2 py-1 rounded-full text-xs font-medium
-          transition-all duration-200 whitespace-nowrap
+          px-2.5 py-1.5 rounded-full text-xs font-medium
+          transition-all duration-300 whitespace-nowrap
           border shadow-lg cursor-pointer
           ${isActive 
-            ? 'bg-white text-slate-900 border-white scale-110' 
-            : 'bg-slate-900/80 text-white border-slate-600 hover:bg-slate-800 hover:scale-105'
+            ? 'scale-110 text-white border-cyan-400 animate-pulse' 
+            : 'bg-slate-900/80 text-white border-slate-600 hover:bg-slate-800 hover:scale-105 hover:border-slate-500'
           }
         `}
         style={{ 
-          backgroundColor: isActive ? HIGHLIGHT_COLORS[element] : undefined,
-          borderColor: isActive ? HIGHLIGHT_COLORS[element] : undefined,
+          backgroundColor: isActive ? 'rgba(0, 217, 255, 0.9)' : undefined,
+          boxShadow: isActive ? '0 0 20px rgba(0, 217, 255, 0.5), 0 0 40px rgba(0, 217, 255, 0.2)' : undefined,
         }}
       >
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: HIGHLIGHT_COLORS[element] }} />
+        <span className="flex items-center gap-1.5">
+          <span 
+            className={`w-2 h-2 rounded-full ${isActive ? 'animate-ping' : ''}`} 
+            style={{ 
+              backgroundColor: isActive ? '#fff' : HIGHLIGHT_COLORS[element],
+            }} 
+          />
+          {!isActive && <span className="w-2 h-2 rounded-full absolute" style={{ backgroundColor: HIGHLIGHT_COLORS[element] }} />}
           {element}
         </span>
       </button>
     </Html>
   );
+}
+
+interface MeshData {
+  mesh: THREE.Mesh;
+  element: string;
+  originalMaterial: THREE.Material;
 }
 
 function GlassHausModel({ 
@@ -98,38 +110,86 @@ function GlassHausModel({
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF('/OfficeBuilding3.gltf');
   const [hovered, setHovered] = useState<string | null>(null);
+  const meshDataRef = useRef<MeshData[]>([]);
+  const isInitializedRef = useRef(false);
+  const isMountedRef = useRef(false);
   
-  // Clone the scene to avoid mutation issues
-  const clonedScene = scene.clone();
+  // Delay hover detection to prevent immediate triggering on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      isMountedRef.current = true;
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
   
-  // Slow auto-rotation
+  // Clone the scene once
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone();
+    return clone;
+  }, [scene]);
+  
+  // Initialize mesh data (only once)
+  useMemo(() => {
+    if (isInitializedRef.current) return;
+    
+    meshDataRef.current = [];
+    clonedScene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const nodeName = child.name || child.parent?.name || '';
+        const element = NODE_TO_ELEMENT[nodeName];
+        
+        if (element && child.material) {
+          meshDataRef.current.push({
+            mesh: child,
+            element,
+            originalMaterial: child.material,
+          });
+        }
+      }
+    });
+    
+    isInitializedRef.current = true;
+  }, [clonedScene]);
+  
+  // Animated pulse effect + material updates
   useFrame((state) => {
+    // Slow auto-rotation
     if (groupRef.current) {
       groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.15) * 0.4;
     }
-  });
-
-  // Apply highlighting to meshes
-  clonedScene.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      const nodeName = child.name || child.parent?.name || '';
-      const element = NODE_TO_ELEMENT[nodeName];
+    
+    // Pulse value
+    const pulse = (Math.sin(state.clock.elapsedTime * 3) + 1) / 2;
+    
+    // Update materials based on highlight state
+    meshDataRef.current.forEach(({ mesh, element, originalMaterial }) => {
+      const isHighlighted = element === highlightedElement || element === hovered;
       
-      if (element && (highlightedElement === element || hovered === element)) {
-        // Create highlighted material
-        const highlightColor = HIGHLIGHT_COLORS[element];
-        if (child.material) {
-          const mat = (child.material as THREE.MeshStandardMaterial).clone();
-          mat.emissive = new THREE.Color(highlightColor);
-          mat.emissiveIntensity = 0.3;
-          child.material = mat;
+      if (isHighlighted) {
+        // Apply highlight material
+        if (mesh.material === originalMaterial || !(mesh.material as THREE.MeshStandardMaterial).emissive) {
+          const highlightMat = (originalMaterial as THREE.MeshStandardMaterial).clone();
+          highlightMat.emissive = new THREE.Color('#00D9FF');
+          highlightMat.transparent = true;
+          highlightMat.opacity = 0.95;
+          mesh.material = highlightMat;
+        }
+        // Animate emissive intensity
+        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.2 + pulse * 0.4;
+      } else {
+        // Restore original material
+        if (mesh.material !== originalMaterial) {
+          mesh.material = originalMaterial;
         }
       }
-    }
+    });
   });
 
   const handlePointerOver = (e: { stopPropagation: () => void; object: THREE.Object3D }) => {
     e.stopPropagation();
+    // Don't process hover events until component is fully mounted
+    if (!isMountedRef.current) return;
+    
     const nodeName = e.object.name || e.object.parent?.name || '';
     const element = NODE_TO_ELEMENT[nodeName];
     if (element) {
@@ -216,11 +276,26 @@ export default function BuildingModel({
             showHotspots={showHotspots}
           />
           
+          {/* Ground plane */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
+            <planeGeometry args={[50, 50]} />
+            <meshStandardMaterial 
+              color="#1a1a2e" 
+              transparent 
+              opacity={0.8}
+              metalness={0.2}
+              roughness={0.8}
+            />
+          </mesh>
+          
+          {/* Grid helper for visual reference */}
+          <gridHelper args={[20, 20, '#2a2a4a', '#1a1a3a']} position={[0, -1.49, 0]} />
+          
           <ContactShadows 
-            position={[0, -1.5, 0]} 
-            opacity={0.5} 
-            scale={20} 
-            blur={2.5} 
+            position={[0, -1.48, 0]} 
+            opacity={0.6} 
+            scale={15} 
+            blur={2} 
           />
           
           <Environment preset="city" />
@@ -238,11 +313,14 @@ export default function BuildingModel({
       
       {/* Hover tooltip */}
       {hovered && (
-        <div className="absolute bottom-4 left-4 bg-slate-900/95 backdrop-blur-sm px-4 py-3 rounded-lg border border-slate-700 shadow-xl">
+        <div 
+          className="absolute bottom-4 left-4 bg-slate-900/95 backdrop-blur-sm px-4 py-3 rounded-lg border border-cyan-500/50 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+          style={{ boxShadow: '0 0 20px rgba(0, 217, 255, 0.15)' }}
+        >
           <div className="flex items-center gap-2 mb-1">
             <span 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: HIGHLIGHT_COLORS[hovered] }}
+              className="w-3 h-3 rounded-full animate-pulse" 
+              style={{ backgroundColor: '#00D9FF' }}
             />
             <p className="text-sm font-semibold text-white">{hovered}</p>
           </div>

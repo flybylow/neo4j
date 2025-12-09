@@ -109,6 +109,7 @@ export default function BaseGraph({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nvlRef = useRef<any>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [isNodeCardExpanded, setIsNodeCardExpanded] = useState(false);
 
   const colors = COLOR_SCHEMES[colorScheme];
 
@@ -130,7 +131,7 @@ export default function BaseGraph({
     const highlighted = isNodeHighlighted(node);
     return {
       id: node.id,
-      color: highlighted ? '#FBBF24' : (colors[primaryLabel] || '#6B7280'),
+      color: highlighted ? '#00D9FF' : (colors[primaryLabel] || '#6B7280'),
       size: highlighted ? (NODE_SIZES[primaryLabel] || 25) * 1.3 : (NODE_SIZES[primaryLabel] || 25),
       caption: String(node.properties?.name || node.id),
       // Store original data for detail panel
@@ -154,6 +155,7 @@ export default function BaseGraph({
   const handleNodeClick = useCallback(
     (node: Node) => {
       setSelectedNode(node);
+      setIsNodeCardExpanded(false); // Start collapsed
       onNodeClick?.(node);
     },
     [onNodeClick]
@@ -199,10 +201,44 @@ export default function BaseGraph({
         </div>
       )}
 
-      {/* Node detail panel */}
-      {selectedNode && (
-        <Card className="absolute top-4 right-4 w-80 bg-slate-900/95 border-slate-700 backdrop-blur">
-          <CardHeader className="pb-2">
+      {/* Node detail panel - collapsed */}
+      {selectedNode && !isNodeCardExpanded && (
+        <div
+          onClick={() => setIsNodeCardExpanded(true)}
+          className="absolute top-4 right-4 bg-slate-900/95 border border-slate-700 backdrop-blur rounded-lg px-4 py-3 flex items-center gap-3 hover:bg-slate-800/95 transition-colors cursor-pointer shadow-xl"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && setIsNodeCardExpanded(true)}
+        >
+          <Badge
+            variant="secondary"
+            className="text-xs"
+            style={{ backgroundColor: colors[(selectedNode as unknown as GraphNode).labels?.[0]] || '#6B7280' }}
+          >
+            {(selectedNode as unknown as GraphNode).labels?.[0]}
+          </Badge>
+          <span className="font-semibold text-white">
+            {String((selectedNode as unknown as GraphNode).properties?.name || selectedNode.id)}
+          </span>
+          <span
+            onClick={(e) => { e.stopPropagation(); setSelectedNode(null); }}
+            className="text-slate-400 hover:text-white transition-colors ml-2 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setSelectedNode(null); }}}
+          >
+            ✕
+          </span>
+        </div>
+      )}
+
+      {/* Node detail panel - expanded */}
+      {selectedNode && isNodeCardExpanded && (
+        <Card className="absolute top-4 right-4 w-80 bg-slate-900/95 border-slate-700 backdrop-blur shadow-xl">
+          <CardHeader 
+            className="pb-2 cursor-pointer hover:bg-slate-800/50 transition-colors"
+            onClick={() => setIsNodeCardExpanded(false)}
+          >
             <div className="flex items-start justify-between">
               <CardTitle className="text-lg text-white">
                 {String((selectedNode as unknown as GraphNode).properties?.name || selectedNode.id)}
@@ -210,7 +246,7 @@ export default function BaseGraph({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedNode(null)}
+                onClick={(e) => { e.stopPropagation(); setSelectedNode(null); }}
                 className="text-slate-400 hover:text-white -mt-1 -mr-2"
               >
                 ✕

@@ -1,5 +1,6 @@
 import BuildingExplorer from '@/components/graph/BuildingExplorer';
 import SidebarPanel from '@/components/graph/SidebarPanel';
+import { VoiceChat } from '@/components/voice';
 import Link from 'next/link';
 
 interface BuildingPageProps {
@@ -34,6 +35,9 @@ export default async function BuildingPage({ params }: BuildingPageProps) {
 
         {/* Floating sidebar - left side with toggle */}
         <SidebarPanel buildingId={id} />
+
+        {/* Voice chat */}
+        <VoiceChat />
       </main>
     </div>
   );
